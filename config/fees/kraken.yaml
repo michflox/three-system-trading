@@ -1,0 +1,9 @@
+# Official source: https://www.kraken.com/en-gb/features/fee-schedule
+# Retrieved: 2026-07-04
+# Kraken Pro Spot Crypto base tier ($0+ 30-day volume) in force on retrieval date.
+# Kraken announced tier changes effective 2026-07-09; re-verify before using after that date.
+venue: kraken
+model: maker_taker
+maker_rate: "0.0025"
+taker_rate: "0.0040"
+

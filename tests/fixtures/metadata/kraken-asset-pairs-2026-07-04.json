@@ -1,0 +1,10 @@
+{
+  "retrieved_at": "2026-07-04T00:00:00Z",
+  "source": "https://api.kraken.com/0/public/AssetPairs?pair=BTCUSD,ETHUSD,SOLUSD&assetVersion=1",
+  "error": [],
+  "result": {
+    "BTC/USD": {"altname":"XBTUSD","wsname":"XBT/USD","base":"BTC","quote":"USD","lot_decimals":8,"ordermin":"0.00005","costmin":"0.5","tick_size":"0.1","status":"online","leverage_buy":[2,3,4,5,6,7,8,9,10],"leverage_sell":[2,3,4,5,6,7,8,9,10],"fees":[[0,0.4]],"fees_maker":[[0,0.25]]},
+    "ETH/USD": {"altname":"ETHUSD","wsname":"ETH/USD","base":"ETH","quote":"USD","lot_decimals":8,"ordermin":"0.001","costmin":"0.5","tick_size":"0.01","status":"online","leverage_buy":[2,3,4,5,6,7,8,9,10],"leverage_sell":[2,3,4,5,6,7,8,9,10],"fees":[[0,0.4]],"fees_maker":[[0,0.25]]},
+    "SOL/USD": {"altname":"SOLUSD","wsname":"SOL/USD","base":"SOL","quote":"USD","lot_decimals":8,"ordermin":"0.06","costmin":"0.5","tick_size":"0.01","status":"online","leverage_buy":[2,3,4,5,6,7,8,9,10],"leverage_sell":[2,3,4,5,6,7,8,9,10],"fees":[[0,0.4]],"fees_maker":[[0,0.25]]}
+  }
+}

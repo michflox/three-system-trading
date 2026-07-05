@@ -1,0 +1,11 @@
+# Official source: https://docs.cdp.coinbase.com/api-reference/advanced-trade-api/rest-api/fees/get-transaction-summary
+# Supporting source: https://help.coinbase.com/en/coinbase/trading-and-funding/advanced-trade/advanced-trade-fees
+# Retrieved: 2026-07-04
+# Coinbase states that the account's current tier controls fees. Load this file with
+# explicit maker_rate and taker_rate overrides obtained from transaction_summary;
+# the loader intentionally refuses to invent a static rate for spot or CFM products.
+venue: coinbase
+model: maker_taker
+maker_rate: null
+taker_rate: null
+

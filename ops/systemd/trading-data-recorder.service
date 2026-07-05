@@ -1,0 +1,27 @@
+[Unit]
+Description=Coinbase and Kraken market data recorder
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tradingbot
+Group=tradingbot
+WorkingDirectory=/opt/trading-bot
+EnvironmentFile=/etc/trading-bot/data-recorder.env
+ExecStartPre=/opt/trading-bot/.venv/bin/python -m data.recorder backfill
+ExecStart=/opt/trading-bot/.venv/bin/python -m data.recorder run
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=30s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/trading-bot /var/log/trading-bot
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

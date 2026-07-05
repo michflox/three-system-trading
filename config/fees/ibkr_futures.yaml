@@ -1,0 +1,10 @@
+# Official source: https://www.interactivebrokers.com/en/pricing/commissions-futures.php
+# Retrieved: 2026-07-04
+# US fixed broker commission for standard futures/FOPs at <=1,000 contracts/month.
+# Product-specific exchange, regulatory, and overnight fees vary and should be added
+# through a product-specific schedule rather than guessed in this generic broker schedule.
+venue: ibkr_futures
+model: per_contract
+commission_per_contract: "0.85"
+additional_per_contract: "0"
+minimum_per_order: "0"
