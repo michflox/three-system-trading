@@ -313,6 +313,13 @@ async def _main(command: str) -> None:
 
 
 def main() -> None:
+    # Load .env for local development; silently skipped on servers where dotenv is not installed.
+    try:
+        from dotenv import load_dotenv  # type: ignore[import-untyped]
+
+        load_dotenv()
+    except ImportError:
+        pass
     parser = argparse.ArgumentParser(description="Record Coinbase and Kraken market data")
     parser.add_argument("command", choices=("run", "backfill", "quality"), nargs="?", default="run")
     arguments = parser.parse_args()
