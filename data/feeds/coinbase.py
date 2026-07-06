@@ -182,7 +182,11 @@ class CoinbaseWebSocketClient:
 
     async def record(self, callback: RowCallback, stop: asyncio.Event) -> None:
         async with websockets.connect(
-            COINBASE_ADVANCED_WS, ping_interval=20, ping_timeout=20, max_queue=4096
+            COINBASE_ADVANCED_WS,
+            ping_interval=20,
+            ping_timeout=20,
+            max_queue=4096,
+            max_size=8 * 1024 * 1024,  # Coinbase l2_data snapshots can exceed the 1MB default
         ) as socket:
             await socket.send(
                 json.dumps(
