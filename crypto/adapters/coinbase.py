@@ -28,7 +28,7 @@ from typing import Any
 import httpx
 import jwt
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519
 from websockets.asyncio.client import connect
 
 from core.events import OrderAck, OrderStatus, OrderType, Position
@@ -58,13 +58,20 @@ class IdempotencyConflictError(RuntimeError):
     pass
 
 
+_PrivateKey = ec.EllipticCurvePrivateKey | ed25519.Ed25519PrivateKey
+
+
 @dataclass(frozen=True, slots=True)
 class CdpJwtAuth:
-    """ES256 signer; its repr deliberately excludes secret material."""
+    """ES256 (ECDSA) or EdDSA (Ed25519) signer; repr excludes secret material."""
 
     key_name: str
-    _private_key: ec.EllipticCurvePrivateKey = field(repr=False)
+    _private_key: _PrivateKey = field(repr=False)
     clock: Callable[[], float] = time.time
+
+    @property
+    def _algorithm(self) -> str:
+        return "ES256" if isinstance(self._private_key, ec.EllipticCurvePrivateKey) else "EdDSA"
 
     @classmethod
     def from_secret(
@@ -78,8 +85,8 @@ class CdpJwtAuth:
             raise ValueError("Coinbase key name and secret are required")
         secret = key_secret.replace("\\n", "\n").encode()
         private_key = serialization.load_pem_private_key(secret, password=None)
-        if not isinstance(private_key, ec.EllipticCurvePrivateKey):
-            raise ValueError("Coinbase requires an ECDSA private key")
+        if not isinstance(private_key, (ec.EllipticCurvePrivateKey, ed25519.Ed25519PrivateKey)):
+            raise ValueError("Coinbase requires an EC (ES256) or Ed25519 (EdDSA) private key")
         return cls(key_name=key_name, _private_key=private_key, clock=clock)
 
     @classmethod
@@ -102,7 +109,7 @@ class CdpJwtAuth:
                 "uri": f"{method.upper()} {REST_HOST}{path}",
             },
             self._private_key,
-            algorithm="ES256",
+            algorithm=self._algorithm,
             headers={"kid": self.key_name, "nonce": secrets.token_hex()},
         )
 
@@ -111,7 +118,7 @@ class CdpJwtAuth:
         return jwt.encode(
             {"sub": self.key_name, "iss": "cdp", "nbf": now, "exp": now + 120},
             self._private_key,
-            algorithm="ES256",
+            algorithm=self._algorithm,
             headers={"kid": self.key_name, "nonce": secrets.token_hex()},
         )
 

@@ -27,7 +27,8 @@ COINBASE_DERIVATIVES_REST = "https://api.exchange.fairx.net"
 COINBASE_ADVANCED_REST = "https://api.coinbase.com"
 COINBASE_ADVANCED_WS = "wss://advanced-trade-ws.coinbase.com"
 _PERMISSIONS_PATH = "/api/v3/brokerage/key_permissions"
-_FUNDING_PATH = "/api/v3/brokerage/cfm/funding_rates"
+# Public endpoint on fairx.net — security: [] (no auth required per official docs)
+_FUNDING_PATH = "/rest/funding-rate"
 SPOT_SYMBOLS = ("BTC-USD", "ETH-USD", "SOL-USD")
 
 RowCallback = Callable[[dict[str, object]], Awaitable[None]]
@@ -116,26 +117,21 @@ class CoinbaseRestClient:
             await asyncio.sleep(0.35)
         return _deduplicate(rows)
 
-    async def fetch_funding(
-        self, symbol: str, trading_session_date: date
-    ) -> list[dict[str, object]]:
+    async def verify_permissions(self) -> None:
+        """Verify the CDP key before any data collection.
+
+        Must be called once at recorder startup. Fails closed:
+        - raises CdePermissionVerificationUnavailable if no auth was provided
+        - raises FundingPermissionError if can_view is not true
+        - raises FundingPermissionError if can_transfer is not false
+        - propagates HTTP errors as-is (network failure → fail closed)
+        """
         auth = self._auth
         if auth is None:
             raise CdePermissionVerificationUnavailable(
-                "fetch_funding requires a CDP API key; pass auth= to CoinbaseRestClient"
+                "CoinbaseRestClient requires auth= to verify key permissions; "
+                "set COINBASE_API_KEY and COINBASE_API_SECRET"
             )
-        await self._verify_funding_permissions(auth)
-        response = await self._client.get(
-            f"{COINBASE_ADVANCED_REST}{_FUNDING_PATH}",
-            params={"product_id": symbol, "date": trading_session_date.isoformat()},
-            headers={"Authorization": f"Bearer {auth.rest_token('GET', _FUNDING_PATH)}"},
-        )
-        response.raise_for_status()
-        return parse_funding(response.json(), expected_symbol=symbol)
-
-    async def _verify_funding_permissions(self, auth: _RestAuth) -> None:
-        if self._permissions_verified:
-            return
         response = await self._client.get(
             f"{COINBASE_ADVANCED_REST}{_PERMISSIONS_PATH}",
             headers={"Authorization": f"Bearer {auth.rest_token('GET', _PERMISSIONS_PATH)}"},
@@ -144,13 +140,30 @@ class CoinbaseRestClient:
         payload = response.json()
         if payload.get("can_view") is not True:
             raise FundingPermissionError(
-                "Coinbase key must have can_view=true for funding data access"
+                "Coinbase key must have can_view=true for data collection"
             )
         if payload.get("can_transfer") is not False:
             raise FundingPermissionError(
                 "Coinbase key has transfer/withdrawal permission; a data-only key is required"
             )
         self._permissions_verified = True
+
+    async def fetch_funding(
+        self, symbol: str, trading_session_date: date
+    ) -> list[dict[str, object]]:
+        # Gate: verify_permissions() must succeed before any fetch.
+        if not self._permissions_verified:
+            raise CdePermissionVerificationUnavailable(
+                "call verify_permissions() before fetch_funding()"
+            )
+        # The funding-rate endpoint is public (security: [] per official docs).
+        # Base: https://api.exchange.fairx.net  Path: /rest/funding-rate
+        response = await self._client.get(
+            f"{COINBASE_DERIVATIVES_REST}{_FUNDING_PATH}",
+            params={"symbol": symbol, "trading_session_date": trading_session_date.isoformat()},
+        )
+        response.raise_for_status()
+        return parse_funding(response.json(), expected_symbol=symbol)
 
     async def backfill_funding(
         self, symbols: Sequence[str], *, start: date, end: date

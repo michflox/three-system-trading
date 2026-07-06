@@ -66,9 +66,9 @@ def test_cde_funding_requires_auth() -> None:
             try:
                 await client.fetch_funding("BIPZ30", datetime(2026, 7, 4).date())
             except CdePermissionVerificationUnavailable as error:
-                assert "auth" in str(error).lower() or "cdp" in str(error).lower()
+                assert "verify_permissions" in str(error)
             else:
-                raise AssertionError("funding without auth did not fail closed")
+                raise AssertionError("fetch_funding without prior verify_permissions did not fail closed")
         finally:
             await client.close()
 
@@ -84,34 +84,38 @@ class _MockAuth:
         return "mock-jwt-token"
 
 
-def _mock_http_client(
-    permissions: dict[str, object],
-    funding_payload: list[object] | None = None,
-) -> MagicMock:
-    perm_resp = MagicMock(spec=httpx.Response)
-    perm_resp.raise_for_status = MagicMock()
-    perm_resp.json = MagicMock(return_value=permissions)
+def _mock_response(payload: object) -> MagicMock:
+    resp = MagicMock(spec=httpx.Response)
+    resp.raise_for_status = MagicMock()
+    resp.json = MagicMock(return_value=payload)
+    return resp
 
-    if funding_payload is not None:
-        fund_resp = MagicMock(spec=httpx.Response)
-        fund_resp.raise_for_status = MagicMock()
-        fund_resp.json = MagicMock(return_value=funding_payload)
-        side_effects: list[object] = [perm_resp, fund_resp]
-    else:
-        side_effects = [perm_resp]
 
+def _client_with_permissions(permissions: dict[str, object]) -> MagicMock:
     mock = MagicMock(spec=httpx.AsyncClient)
-    mock.get = AsyncMock(side_effect=side_effects)
+    mock.get = AsyncMock(return_value=_mock_response(permissions))
+    return mock
+
+
+def _client_with_permissions_then_funding(
+    permissions: dict[str, object],
+    funding_payload: list[object],
+) -> MagicMock:
+    mock = MagicMock(spec=httpx.AsyncClient)
+    mock.get = AsyncMock(
+        side_effect=[_mock_response(permissions), _mock_response(funding_payload)]
+    )
     return mock
 
 
 def test_funding_permission_gate_refuses_if_can_transfer_is_true() -> None:
-    http = _mock_http_client(
+    # verify_permissions() must refuse when can_transfer=true
+    http = _client_with_permissions(
         {"can_view": True, "can_trade": False, "can_transfer": True, "can_receive": True}
     )
-    recorder = CoinbaseRestClient(client=http, auth=_MockAuth())
+    client = CoinbaseRestClient(client=http, auth=_MockAuth())
     try:
-        asyncio.run(recorder.fetch_funding("BIPZ30", date(2025, 8, 13)))
+        asyncio.run(client.verify_permissions())
     except FundingPermissionError as error:
         assert "transfer" in str(error).lower()
     else:
@@ -119,12 +123,13 @@ def test_funding_permission_gate_refuses_if_can_transfer_is_true() -> None:
 
 
 def test_funding_permission_gate_refuses_if_can_view_is_false() -> None:
-    http = _mock_http_client(
+    # verify_permissions() must refuse when can_view=false
+    http = _client_with_permissions(
         {"can_view": False, "can_trade": False, "can_transfer": False, "can_receive": False}
     )
-    recorder = CoinbaseRestClient(client=http, auth=_MockAuth())
+    client = CoinbaseRestClient(client=http, auth=_MockAuth())
     try:
-        asyncio.run(recorder.fetch_funding("BIPZ30", date(2025, 8, 13)))
+        asyncio.run(client.verify_permissions())
     except FundingPermissionError as error:
         assert "can_view" in str(error)
     else:
@@ -132,6 +137,7 @@ def test_funding_permission_gate_refuses_if_can_view_is_false() -> None:
 
 
 def test_funding_permission_gate_allows_view_only_key() -> None:
+    # verify_permissions() passes, then fetch_funding() hits the public fairx.net endpoint
     funding_payload = [
         {
             "symbol": "BIPZ30",
@@ -142,15 +148,27 @@ def test_funding_permission_gate_allows_view_only_key() -> None:
             "event_time": "2025-08-13T12:00:00Z",
         }
     ]
-    http = _mock_http_client(
+    http = _client_with_permissions_then_funding(
         {"can_view": True, "can_trade": False, "can_transfer": False, "can_receive": False},
         funding_payload,
     )
-    recorder = CoinbaseRestClient(client=http, auth=_MockAuth())
-    rows = asyncio.run(recorder.fetch_funding("BIPZ30", date(2025, 8, 13)))
+    client = CoinbaseRestClient(client=http, auth=_MockAuth())
+
+    async def exercise() -> list[dict[str, object]]:
+        await client.verify_permissions()
+        return await client.fetch_funding("BIPZ30", date(2025, 8, 13))
+
+    rows = asyncio.run(exercise())
     assert len(rows) == 1
     assert rows[0]["funding_rate"] == Decimal("0.000100")
     assert rows[0]["venue"] == "coinbase_cfm"
+    # Confirm fetch_funding used the fairx.net public endpoint, not api.coinbase.com
+    second_call_url: str = http.get.call_args_list[1].args[0]
+    assert "fairx.net" in second_call_url
+    # Confirm correct params were used (symbol and trading_session_date, not product_id)
+    second_call_params: dict[str, str] = http.get.call_args_list[1].kwargs.get("params", {})
+    assert second_call_params.get("symbol") == "BIPZ30"
+    assert "trading_session_date" in second_call_params
 
 
 def test_kraken_parser_drops_documented_uncommitted_last_candle() -> None:

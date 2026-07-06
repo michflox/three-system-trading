@@ -8,7 +8,7 @@ from decimal import Decimal
 import httpx
 import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519
 from cryptography.hazmat.primitives.serialization import (
     Encoding,
     NoEncryption,
@@ -71,6 +71,23 @@ def test_rest_and_websocket_jwt_claims_follow_cdp_contract() -> None:
 
     websocket = jwt.decode(auth.websocket_token(), options={"verify_signature": False})
     assert "uri" not in websocket
+
+
+def test_ed25519_key_produces_eddsa_jwt() -> None:
+    key = ed25519.Ed25519PrivateKey.generate()
+    pem = key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
+    auth = CdpJwtAuth.from_secret(
+        "organizations/test/apiKeys/ed-key",
+        pem.decode(),
+        clock=lambda: 1_700_000_000.0,
+    )
+    rest = auth.rest_token("GET", "/api/v3/brokerage/key_permissions")
+    headers = jwt.get_unverified_header(rest)
+    claims = jwt.decode(rest, options={"verify_signature": False})
+    assert headers["alg"] == "EdDSA"
+    assert headers["kid"] == "organizations/test/apiKeys/ed-key"
+    assert claims["sub"] == "organizations/test/apiKeys/ed-key"
+    assert claims["iss"] == "cdp"
 
 
 def test_permission_guard_rejects_transfer_and_blocks_orders(tmp_path) -> None:

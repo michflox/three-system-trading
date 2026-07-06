@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+from crypto.adapters.coinbase import CdpJwtAuth
 from data.feeds.coinbase import (
     SPOT_SYMBOLS,
     CoinbaseRestClient,
@@ -60,7 +61,12 @@ class Recorder:
     def __init__(self, config: RecorderConfig) -> None:
         self.config = config
         self.store = ParquetStore(config.data_root)
-        self.coinbase = CoinbaseRestClient()
+        auth: CdpJwtAuth | None
+        try:
+            auth = CdpJwtAuth.from_env()
+        except RuntimeError:
+            auth = None
+        self.coinbase = CoinbaseRestClient(auth=auth)
         self.kraken = KrakenRestClient()
         self.stop = asyncio.Event()
         self.queue: asyncio.Queue[dict[str, object]] = asyncio.Queue(maxsize=10_000)
@@ -70,6 +76,8 @@ class Recorder:
         await self.kraken.close()
 
     async def backfill(self) -> None:
+        LOGGER.info("verifying Coinbase key permissions before backfill")
+        await self.coinbase.verify_permissions()
         marker = self.config.data_root / "status" / "backfill-complete.json"
         if marker.exists():
             LOGGER.info("backfill marker exists; skipping completed backfill")
@@ -108,6 +116,8 @@ class Recorder:
         )
 
     async def run_forever(self) -> None:
+        LOGGER.info("verifying Coinbase key permissions before starting recorder")
+        await self.coinbase.verify_permissions()
         async with asyncio.TaskGroup() as group:
             group.create_task(self._buffer_writer())
             group.create_task(

@@ -1,19 +1,27 @@
 # Market-data recorder deployment
 
-Spot recording uses public market-data endpoints. Deployment is currently blocked for the CFM
-funding stream: the live CDE endpoint requires a DCC API key although its endpoint example omits
-authentication, and Coinbase documents no permission-inspection endpoint for DCC keys. The
-recorder refuses to accept that unverifiable credential, as required by the repository security
-policy. Do not enable this unit until Coinbase provides a way to verify that transfer/withdrawal
-permission is absent (or clarifies that DCC keys categorically cannot possess it).
+Spot recording uses public market-data endpoints. The CFM funding stream uses the public
+`api.exchange.fairx.net/rest/funding-rate` endpoint (no credentials required for the data fetch).
+The permission gate calls `api.coinbase.com/api/v3/brokerage/key_permissions` at recorder startup
+using a **read-only CDP API key** (requires `can_view=true`, refuses if `can_transfer` is true).
+Recorder startup fails closed if the key is absent, misconfigured, or has transfer permissions.
 
-1. Install the repository and virtual environment at `/opt/trading-bot`.
-2. Create the `tradingbot` system user and `/var/lib/trading-bot` owned by that user.
-3. Copy `data-recorder.env.example` to `/etc/trading-bot/data-recorder.env` and verify the
-   current Coinbase CFM contract symbols from the official contract/product metadata.
-4. Copy `trading-data-recorder.service` to `/etc/systemd/system/`, run
+Before enabling the recorder:
+
+1. Create a CDP API key with **view permission only** (no trade, no transfer).
+   If the key uses Ed25519 (the current Coinbase default), `CdpJwtAuth` supports it natively.
+2. Install the repository and virtual environment at `/opt/trading-bot`.
+3. Create the `tradingbot` system user and `/var/lib/trading-bot` owned by that user.
+4. Copy `data-recorder.env.example` to `/etc/trading-bot/data-recorder.env` (owner `root`, mode
+   `0600`). Set `COINBASE_API_KEY` and `COINBASE_API_SECRET`. Verify CFM contract symbols.
+5. Test the permission gate manually before enabling the unit:
+   ```
+   COINBASE_API_KEY=... COINBASE_API_SECRET=... python -m data.recorder backfill
+   ```
+   Confirm it completes and `status/backfill-complete.json` is written.
+6. Copy `trading-data-recorder.service` to `/etc/systemd/system/`, run
    `systemctl daemon-reload`, then `systemctl enable --now trading-data-recorder`.
-5. Confirm `status/funding-recorder.json` advances hourly and inspect the daily quality report.
+7. Confirm `status/funding-recorder.json` advances hourly and inspect the daily quality report.
 
 Disk free space is checked every five minutes. Crossing the configured threshold writes an
 append-only alert, logs a critical systemd-journal event, and exits nonzero so systemd records and

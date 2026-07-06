@@ -183,11 +183,13 @@ for unit in \
     install_unit "$unit"
 done
 
-# Install the data-recorder unit file but do NOT enable it.
-# Blocked: Coinbase DCC/CFM endpoint requires a key whose permissions cannot
-# be verified. See ops/systemd/README.md before enabling this service.
+# Install the data-recorder unit file but do NOT enable it at bootstrap.
+# The funding endpoint (api.exchange.fairx.net/rest/funding-rate) is public;
+# the permission gate uses the CDP key to call /api/v3/brokerage/key_permissions.
+# Fill in COINBASE_API_KEY and COINBASE_API_SECRET in data-recorder.env and run
+# 'python -m data.recorder backfill' to verify before enabling this service.
 install_unit "trading-data-recorder.service"
-echo "NOTE: trading-data-recorder.service installed but NOT enabled (see README)"
+echo "NOTE: trading-data-recorder.service installed but NOT enabled (fill secrets first)"
 
 systemctl daemon-reload
 echo "systemd reloaded"
