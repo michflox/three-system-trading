@@ -4,59 +4,59 @@
 <text x="310" y="25" font-size="14">base</text>
 <text x="430" y="25" font-size="14">+50%</text>
 <text x="5" y="61" font-size="13">fast_1</text>
-<rect x="180" y="40" width="118" height="30" fill="rgb(46,255,46)"/>
-<text x="185" y="61" font-size="12">520.53%</text>
-<rect x="300" y="40" width="118" height="30" fill="rgb(48,255,48)"/>
-<text x="305" y="61" font-size="12">516.87%</text>
+<rect x="180" y="40" width="118" height="30" fill="rgb(49,255,49)"/>
+<text x="185" y="61" font-size="12">452.49%</text>
+<rect x="300" y="40" width="118" height="30" fill="rgb(49,255,49)"/>
+<text x="305" y="61" font-size="12">453.77%</text>
 <rect x="420" y="40" width="118" height="30" fill="rgb(44,255,44)"/>
-<text x="425" y="61" font-size="12">526.87%</text>
+<text x="425" y="61" font-size="12">464.63%</text>
 <text x="5" y="93" font-size="13">slow_1</text>
-<rect x="180" y="72" width="118" height="30" fill="rgb(42,255,42)"/>
-<text x="185" y="93" font-size="12">531.75%</text>
-<rect x="300" y="72" width="118" height="30" fill="rgb(48,255,48)"/>
-<text x="305" y="93" font-size="12">516.87%</text>
-<rect x="420" y="72" width="118" height="30" fill="rgb(62,255,62)"/>
-<text x="425" y="93" font-size="12">480.10%</text>
+<rect x="180" y="72" width="118" height="30" fill="rgb(44,255,44)"/>
+<text x="185" y="93" font-size="12">463.17%</text>
+<rect x="300" y="72" width="118" height="30" fill="rgb(49,255,49)"/>
+<text x="305" y="93" font-size="12">453.77%</text>
+<rect x="420" y="72" width="118" height="30" fill="rgb(63,255,63)"/>
+<text x="425" y="93" font-size="12">421.38%</text>
 <text x="5" y="125" font-size="13">fast_2</text>
-<rect x="180" y="104" width="118" height="30" fill="rgb(64,255,64)"/>
-<text x="185" y="125" font-size="12">477.24%</text>
-<rect x="300" y="104" width="118" height="30" fill="rgb(48,255,48)"/>
-<text x="305" y="125" font-size="12">516.87%</text>
+<rect x="180" y="104" width="118" height="30" fill="rgb(66,255,66)"/>
+<text x="185" y="125" font-size="12">415.97%</text>
+<rect x="300" y="104" width="118" height="30" fill="rgb(49,255,49)"/>
+<text x="305" y="125" font-size="12">453.77%</text>
 <rect x="420" y="104" width="118" height="30" fill="rgb(35,255,35)"/>
-<text x="425" y="125" font-size="12">548.31%</text>
+<text x="425" y="125" font-size="12">484.03%</text>
 <text x="5" y="157" font-size="13">slow_2</text>
-<rect x="180" y="136" width="118" height="30" fill="rgb(41,255,41)"/>
-<text x="185" y="157" font-size="12">532.23%</text>
-<rect x="300" y="136" width="118" height="30" fill="rgb(48,255,48)"/>
-<text x="305" y="157" font-size="12">516.87%</text>
+<rect x="180" y="136" width="118" height="30" fill="rgb(43,255,43)"/>
+<text x="185" y="157" font-size="12">466.24%</text>
+<rect x="300" y="136" width="118" height="30" fill="rgb(49,255,49)"/>
+<text x="305" y="157" font-size="12">453.77%</text>
 <rect x="420" y="136" width="118" height="30" fill="rgb(44,255,44)"/>
-<text x="425" y="157" font-size="12">525.57%</text>
+<text x="425" y="157" font-size="12">463.78%</text>
 <text x="5" y="189" font-size="13">fast_3</text>
-<rect x="180" y="168" width="118" height="30" fill="rgb(41,255,41)"/>
-<text x="185" y="189" font-size="12">533.19%</text>
-<rect x="300" y="168" width="118" height="30" fill="rgb(48,255,48)"/>
-<text x="305" y="189" font-size="12">516.87%</text>
-<rect x="420" y="168" width="118" height="30" fill="rgb(56,255,56)"/>
-<text x="425" y="189" font-size="12">496.13%</text>
+<rect x="180" y="168" width="118" height="30" fill="rgb(43,255,43)"/>
+<text x="185" y="189" font-size="12">467.28%</text>
+<rect x="300" y="168" width="118" height="30" fill="rgb(49,255,49)"/>
+<text x="305" y="189" font-size="12">453.77%</text>
+<rect x="420" y="168" width="118" height="30" fill="rgb(57,255,57)"/>
+<text x="425" y="189" font-size="12">435.57%</text>
 <text x="5" y="221" font-size="13">slow_3</text>
-<rect x="180" y="200" width="118" height="30" fill="rgb(61,255,61)"/>
-<text x="185" y="221" font-size="12">482.97%</text>
-<rect x="300" y="200" width="118" height="30" fill="rgb(48,255,48)"/>
-<text x="305" y="221" font-size="12">516.87%</text>
-<rect x="420" y="200" width="118" height="30" fill="rgb(76,255,76)"/>
-<text x="425" y="221" font-size="12">446.88%</text>
+<rect x="180" y="200" width="118" height="30" fill="rgb(65,255,65)"/>
+<text x="185" y="221" font-size="12">418.82%</text>
+<rect x="300" y="200" width="118" height="30" fill="rgb(49,255,49)"/>
+<text x="305" y="221" font-size="12">453.77%</text>
+<rect x="420" y="200" width="118" height="30" fill="rgb(77,255,77)"/>
+<text x="425" y="221" font-size="12">392.18%</text>
 <text x="5" y="253" font-size="13">breakout_days</text>
-<rect x="180" y="232" width="118" height="30" fill="rgb(53,255,53)"/>
-<text x="185" y="253" font-size="12">503.08%</text>
-<rect x="300" y="232" width="118" height="30" fill="rgb(48,255,48)"/>
-<text x="305" y="253" font-size="12">516.87%</text>
+<rect x="180" y="232" width="118" height="30" fill="rgb(59,255,59)"/>
+<text x="185" y="253" font-size="12">431.93%</text>
+<rect x="300" y="232" width="118" height="30" fill="rgb(49,255,49)"/>
+<text x="305" y="253" font-size="12">453.77%</text>
 <rect x="420" y="232" width="118" height="30" fill="rgb(58,255,58)"/>
-<text x="425" y="253" font-size="12">490.98%</text>
+<text x="425" y="253" font-size="12">433.39%</text>
 <text x="5" y="285" font-size="13">breakout_decay</text>
-<rect x="180" y="264" width="118" height="30" fill="rgb(112,255,112)"/>
-<text x="185" y="285" font-size="12">355.19%</text>
-<rect x="300" y="264" width="118" height="30" fill="rgb(48,255,48)"/>
-<text x="305" y="285" font-size="12">516.87%</text>
-<rect x="420" y="264" width="118" height="30" fill="rgb(92,255,92)"/>
-<text x="425" y="285" font-size="12">405.62%</text>
+<rect x="180" y="264" width="118" height="30" fill="rgb(121,255,121)"/>
+<text x="185" y="285" font-size="12">295.59%</text>
+<rect x="300" y="264" width="118" height="30" fill="rgb(49,255,49)"/>
+<text x="305" y="285" font-size="12">453.77%</text>
+<rect x="420" y="264" width="118" height="30" fill="rgb(90,255,90)"/>
+<text x="425" y="285" font-size="12">362.43%</text>
 </svg>

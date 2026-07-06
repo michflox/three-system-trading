@@ -1,0 +1,12 @@
+{
+  "consumed_at": "2026-07-06T04:41:28.790982+00:00",
+  "data_sha256": "497c19823ee9a2eca924f4732c4b0d14cc8d394a9344f60d52443aa94c4c0538",
+  "in_sample_end": "2024-06-24T00:00:00+00:00",
+  "maker_fee_rate": "0.006",
+  "max_drawdown": "-0.1484148970396428393838231845",
+  "net_return": "0.0113996179512249480000",
+  "out_of_sample_end": "2026-07-04T00:00:00+00:00",
+  "out_of_sample_start": "2024-06-25T00:00:00+00:00",
+  "record_sha256": "7b19affa258e0004cbb51e235fe67819db499e22ddce557cb908bea739fabe28",
+  "sharpe": 0.0976378199831184
+}

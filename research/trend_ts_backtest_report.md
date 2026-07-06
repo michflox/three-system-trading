@@ -2,14 +2,14 @@
 
 Data: Coinbase daily BTC-USD and ETH-USD, through 2024-06-24.
 
-- Ending equity: $616,866.87
-- Net return: 516.8669%
-- Sharpe: 1.281
-- Maximum drawdown: -25.4804%
-- Turnover: 55.4074
-- Total fees: $87,980.91
-- Fee drag: 14.55% of gross
-- Coinbase maker fee supplied from API: 0.004
+- Ending equity: $553,770.02
+- Net return: 453.7700%
+- Sharpe: 1.209
+- Maximum drawdown: -27.4944%
+- Turnover: 55.1301
+- Total fees: $123,774.32
+- Fee drag: 21.43% of gross
+- Coinbase maker fee supplied from API: 0.006
 - ±50% perturbation profitability requirement: **PASS**
 
 Sizing constraints: 10% volatility-target contribution, 2x per-instrument leverage cap, 25% allocation cap, and 25% rebalance buffer. Maker limits fill only on strict trade-through.
