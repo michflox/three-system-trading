@@ -1,10 +1,11 @@
 """Coinbase public REST and WebSocket market-data client.
 
-Official docs verified 2026-07-04:
+Official docs verified 2026-07-05:
 - https://docs.cdp.coinbase.com/exchange/rest-api/products/get-product-candles
 - https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/websocket/websocket-overview
 - https://coinbase-cloud.mintlify.app/api-reference/derivatives-api/rest-api/funding-rate/get-historical-funding-rates
 - https://coinbase-cloud.mintlify.app/api-reference/derivatives-api/rest-api/authentication
+- https://docs.cdp.coinbase.com/api-reference/advanced-trade-api/rest-api/data-api/get-api-key-permissions
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import json
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, Protocol
 
 import httpx
 import websockets
@@ -23,20 +24,43 @@ from data.quality import valid_price
 
 COINBASE_EXCHANGE_REST = "https://api.exchange.coinbase.com"
 COINBASE_DERIVATIVES_REST = "https://api.exchange.fairx.net"
+COINBASE_ADVANCED_REST = "https://api.coinbase.com"
 COINBASE_ADVANCED_WS = "wss://advanced-trade-ws.coinbase.com"
+_PERMISSIONS_PATH = "/api/v3/brokerage/key_permissions"
+_FUNDING_PATH = "/api/v3/brokerage/cfm/funding_rates"
 SPOT_SYMBOLS = ("BTC-USD", "ETH-USD", "SOL-USD")
 
 RowCallback = Callable[[dict[str, object]], Awaitable[None]]
 
 
 class CdePermissionVerificationUnavailable(RuntimeError):
-    """Raised because Coinbase exposes no permission-inspection API for DCC keys."""
+    """Raised when funding is requested without providing CDP authentication."""
+
+
+class FundingPermissionError(PermissionError):
+    """Raised when the CDP key fails the can_view / can_transfer permission gate."""
+
+
+class _RestAuth(Protocol):
+    """Structural type accepted by CoinbaseRestClient for authenticated requests.
+
+    CdpJwtAuth from crypto.adapters.coinbase satisfies this protocol; the data
+    module does not import from crypto to avoid a layering dependency.
+    """
+
+    def rest_token(self, method: str, path: str) -> str: ...
 
 
 class CoinbaseRestClient:
-    def __init__(self, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        client: httpx.AsyncClient | None = None,
+        auth: _RestAuth | None = None,
+    ) -> None:
         self._owned = client is None
         self._client = client or httpx.AsyncClient(timeout=30.0)
+        self._auth = auth
+        self._permissions_verified = False
 
     async def close(self) -> None:
         if self._owned:
@@ -95,12 +119,38 @@ class CoinbaseRestClient:
     async def fetch_funding(
         self, symbol: str, trading_session_date: date
     ) -> list[dict[str, object]]:
-        del symbol, trading_session_date
-        raise CdePermissionVerificationUnavailable(
-            "Coinbase CDE funding requires a DCC API key, but the official CDE API does not "
-            "provide a permission-inspection endpoint with which to verify that withdrawal or "
-            "transfer permission is absent; refusing to use an unverifiable credential"
+        auth = self._auth
+        if auth is None:
+            raise CdePermissionVerificationUnavailable(
+                "fetch_funding requires a CDP API key; pass auth= to CoinbaseRestClient"
+            )
+        await self._verify_funding_permissions(auth)
+        response = await self._client.get(
+            f"{COINBASE_ADVANCED_REST}{_FUNDING_PATH}",
+            params={"product_id": symbol, "date": trading_session_date.isoformat()},
+            headers={"Authorization": f"Bearer {auth.rest_token('GET', _FUNDING_PATH)}"},
         )
+        response.raise_for_status()
+        return parse_funding(response.json(), expected_symbol=symbol)
+
+    async def _verify_funding_permissions(self, auth: _RestAuth) -> None:
+        if self._permissions_verified:
+            return
+        response = await self._client.get(
+            f"{COINBASE_ADVANCED_REST}{_PERMISSIONS_PATH}",
+            headers={"Authorization": f"Bearer {auth.rest_token('GET', _PERMISSIONS_PATH)}"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("can_view") is not True:
+            raise FundingPermissionError(
+                "Coinbase key must have can_view=true for funding data access"
+            )
+        if payload.get("can_transfer") is not False:
+            raise FundingPermissionError(
+                "Coinbase key has transfer/withdrawal permission; a data-only key is required"
+            )
+        self._permissions_verified = True
 
     async def backfill_funding(
         self, symbols: Sequence[str], *, start: date, end: date
