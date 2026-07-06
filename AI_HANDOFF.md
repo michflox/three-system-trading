@@ -2,13 +2,14 @@
 
 **Generated:** 2026-07-05  
 **Branch:** main  
-**Status:** In-sample evaluation complete — out-of-sample holdout unconsumed
+**Status:** In-sample evaluation complete with provisional/manual fee — out-of-sample holdout unconsumed
 
 ---
 
 ## Repository State
 
-The codebase is clean. All source modules, tests, and configuration are committed. The working tree contains only the four research artifacts added by the in-sample run (staged for the next commit). The OOS protection is intact.
+All source modules, tests, configuration, and in-sample research artifacts are committed on
+`main`. The OOS protection is intact.
 
 ---
 
@@ -37,7 +38,12 @@ The codebase is clean. All source modules, tests, and configuration are committe
 
 ---
 
-## In-Sample Results (maker fee 0.004, 80% of data through 2024-06-24)
+## In-Sample Results (provisional/manual maker fee 0.004, 80% of data through 2024-06-24)
+
+**Fee clarification:** `0.004` was supplied manually for the in-sample run. It was not retrieved
+or verified through the Coinbase API. The committed backtest report's wording that the rate was
+"supplied from API" is historical output from that provisional run and must not be interpreted as
+API verification.
 
 | Metric | Value |
 |---|---|
@@ -74,9 +80,14 @@ OOS marker files (`trend_ts_oos_consumed.json`, `trend_ts_oos_signoff.md`) do **
 
 ## Remaining Blockers
 
-1. **Maker fee precision:** `0.004` was used as a placeholder. The authenticated Coinbase `/api/v3/brokerage/transaction_summary` endpoint returns the exact account-tier rate. A new CDP API key with View permission is required (the previously used key `34d55202-…` returned 401). Re-run the IS protocol with the precise rate if it differs from 0.004 before consuming OOS.
+1. **Maker fee verification:** `0.004` was used as a provisional/manual value and has not been
+   verified by the Coinbase API. The authenticated Coinbase
+   `/api/v3/brokerage/transaction_summary` endpoint returns the account-tier rate. A new read-only
+   CDP API key with View permission is required. Re-run the IS protocol if the verified rate differs
+   from `0.004`; do not consume OOS before this check.
 
-2. **Security — revoke exposed credentials:** The file `get_coinbase_fee.py` (now deleted) contained plaintext credentials (`3e21d67c-3f6a-410c-b8af-fb2ab4e84949`). These were never committed to git, but the file existed untracked on disk. Revoke this API key in your Coinbase account immediately.
+2. **Security — old credential revoked:** The user confirmed on 2026-07-05 that the previously
+   exposed Coinbase API key was revoked. Do not reuse it.
 
 3. **Kraken fee schedule expiry:** `config/fees/kraken.yaml` hardcodes the base-tier rate with a note that Kraken announced changes effective 2026-07-09. That date has passed — re-verify before using Kraken for paper or live trading.
 
@@ -84,13 +95,14 @@ OOS marker files (`trend_ts_oos_consumed.json`, `trend_ts_oos_signoff.md`) do **
 
 ## Recommended Next Step
 
-The in-sample evidence supports proceeding to OOS evaluation:
+The in-sample evidence supports considering OOS evaluation after the maker fee is API-verified:
 
 - CAGR of 26.5%, Sharpe 1.28, and a max drawdown of −25% are credible crypto-trend results over a nearly 8-year window.
 - The ±50% perturbation gate passed 24/24, with no run below +350%.
-- The fee drag (14.55%) is accounted for at the placeholder rate; confirm the exact rate first if possible.
+- The fee drag (14.55%) is accounted for at the provisional/manual `0.004` rate. API verification
+  is required before OOS approval.
 
-When ready, run the one-shot holdout **exactly once**:
+Only after fee verification and explicit user approval, run the one-shot holdout **exactly once**:
 
 ```bash
 python -m research.trend_walkforward \
