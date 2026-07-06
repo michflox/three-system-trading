@@ -15,6 +15,7 @@ from pathlib import Path
 
 from crypto.adapters.coinbase import CdpJwtAuth
 from data.feeds.coinbase import (
+    CFM_SYMBOLS,
     SPOT_SYMBOLS,
     CoinbaseRestClient,
     CoinbaseWebSocketClient,
@@ -42,9 +43,10 @@ class RecorderConfig:
             report_root=Path(os.environ.get("TRADING_REPORT_DIR", "var/reports")),
             cfm_symbols=tuple(
                 item.strip()
-                for item in os.environ.get("COINBASE_CFM_SYMBOLS", "BIPZ30,ETPZ30,SLPZ30").split(
-                    ","
-                )
+                for item in os.environ.get(
+                    "COINBASE_CFM_SYMBOLS",
+                    ",".join(CFM_SYMBOLS),
+                ).split(",")
                 if item.strip()
             ),
             spot_backfill_start=datetime.fromisoformat(
@@ -101,19 +103,14 @@ class Recorder:
                 self.store.append_ohlcv(
                     await self.kraken.fetch_spot_candles(symbol, interval_minutes=minutes)
                 )
-        LOGGER.info("backfilling Coinbase CFM hourly funding")
-        funding = await self.coinbase.backfill_funding(
-            self.config.cfm_symbols,
-            start=self.config.funding_backfill_start,
-            end=now.date(),
+        # CFM funding history is not available via CDP JWT (the fairx.net endpoint
+        # requires Coinbase Exchange HMAC auth). Funding collection starts from the
+        # first hourly poll after this backfill completes.
+        LOGGER.info(
+            "CFM funding historical backfill not available via CDP JWT; "
+            "hourly poll will begin collection from now"
         )
-        if not funding:
-            raise RuntimeError("Coinbase CFM funding backfill returned no rows")
-        self.store.append_funding(funding)
-        _atomic_json(
-            marker,
-            {"completed_at": now.isoformat(), "funding_rows": len(funding)},
-        )
+        _atomic_json(marker, {"completed_at": now.isoformat(), "funding_rows": 0})
 
     async def run_forever(self) -> None:
         LOGGER.info("verifying Coinbase key permissions before starting recorder")
@@ -191,7 +188,7 @@ class Recorder:
                     )
             funding_rows: list[dict[str, object]] = []
             for symbol in self.config.cfm_symbols:
-                funding_rows.extend(await self.coinbase.fetch_funding(symbol, now.date()))
+                funding_rows.extend(await self.coinbase.fetch_funding(symbol))
             latest_funding = _latest_per_symbol(funding_rows)
             if not latest_funding:
                 raise RuntimeError("Coinbase CFM hourly funding poll returned no rows")

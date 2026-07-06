@@ -1,19 +1,22 @@
 """Coinbase public REST and WebSocket market-data client.
 
-Official docs verified 2026-07-05:
+Official docs verified 2026-07-05/06:
 - https://docs.cdp.coinbase.com/exchange/rest-api/products/get-product-candles
 - https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/websocket/websocket-overview
-- https://coinbase-cloud.mintlify.app/api-reference/derivatives-api/rest-api/funding-rate/get-historical-funding-rates
-- https://coinbase-cloud.mintlify.app/api-reference/derivatives-api/rest-api/authentication
 - https://docs.cdp.coinbase.com/api-reference/advanced-trade-api/rest-api/data-api/get-api-key-permissions
+- https://docs.cdp.coinbase.com/api-reference/advanced-trade-api/rest-api/products/get-best-bid-ask
+
+Note: api.exchange.fairx.net/rest/funding-rate requires Coinbase Exchange HMAC auth
+(CB-ACCESS-KEY/SIGN), not CDP JWT.  Funding rate is sourced from the Advanced Trade
+product endpoint (future_product_details.funding_rate) instead.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Awaitable, Callable, Mapping, Sequence
-from datetime import UTC, date, datetime, timedelta
+from collections.abc import Awaitable, Callable, Sequence
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Protocol
 
@@ -23,13 +26,13 @@ import websockets
 from data.quality import valid_price
 
 COINBASE_EXCHANGE_REST = "https://api.exchange.coinbase.com"
-COINBASE_DERIVATIVES_REST = "https://api.exchange.fairx.net"
 COINBASE_ADVANCED_REST = "https://api.coinbase.com"
 COINBASE_ADVANCED_WS = "wss://advanced-trade-ws.coinbase.com"
 _PERMISSIONS_PATH = "/api/v3/brokerage/key_permissions"
-# Public endpoint on fairx.net — security: [] (no auth required per official docs)
-_FUNDING_PATH = "/rest/funding-rate"
 SPOT_SYMBOLS = ("BTC-USD", "ETH-USD", "SOL-USD")
+# Nano perpetual futures on the Coinbase Derivatives Exchange (CDE).
+# Product IDs expire Dec 2030; update at contract rollover.
+CFM_SYMBOLS = ("BIP-20DEC30-CDE", "ETP-20DEC30-CDE", "SLP-20DEC30-CDE")
 
 RowCallback = Callable[[dict[str, object]], Awaitable[None]]
 
@@ -148,34 +151,24 @@ class CoinbaseRestClient:
             )
         self._permissions_verified = True
 
-    async def fetch_funding(
-        self, symbol: str, trading_session_date: date
-    ) -> list[dict[str, object]]:
+    async def fetch_funding(self, symbol: str) -> list[dict[str, object]]:
         # Gate: verify_permissions() must succeed before any fetch.
         if not self._permissions_verified:
             raise CdePermissionVerificationUnavailable(
                 "call verify_permissions() before fetch_funding()"
             )
-        # The funding-rate endpoint is public (security: [] per official docs).
-        # Base: https://api.exchange.fairx.net  Path: /rest/funding-rate
+        # Funding rate is embedded in the product response (future_product_details).
+        # api.exchange.fairx.net/rest/funding-rate requires Exchange HMAC auth and
+        # provides no historical data via CDP JWT; use the Advanced Trade product
+        # endpoint instead.
+        assert self._auth is not None  # invariant: always true after verify_permissions()
+        path = f"/api/v3/brokerage/products/{symbol}"
         response = await self._client.get(
-            f"{COINBASE_DERIVATIVES_REST}{_FUNDING_PATH}",
-            params={"symbol": symbol, "trading_session_date": trading_session_date.isoformat()},
+            f"{COINBASE_ADVANCED_REST}{path}",
+            headers={"Authorization": f"Bearer {self._auth.rest_token('GET', path)}"},
         )
         response.raise_for_status()
-        return parse_funding(response.json(), expected_symbol=symbol)
-
-    async def backfill_funding(
-        self, symbols: Sequence[str], *, start: date, end: date
-    ) -> list[dict[str, object]]:
-        rows: list[dict[str, object]] = []
-        current = start
-        while current <= end:
-            for symbol in symbols:
-                rows.extend(await self.fetch_funding(symbol, current))
-                await asyncio.sleep(0.25)
-            current += timedelta(days=1)
-        return _deduplicate(rows)
+        return parse_product_funding(response.json(), product_id=symbol)
 
 
 class CoinbaseWebSocketClient:
@@ -274,30 +267,34 @@ def parse_spot_candles(payload: object, *, symbol: str, interval: str) -> list[d
     return rows
 
 
-def parse_funding(payload: object, *, expected_symbol: str) -> list[dict[str, object]]:
-    if not isinstance(payload, list):
-        raise ValueError("Coinbase funding response must be a list")
-    rows: list[dict[str, object]] = []
-    for item in payload:
-        if not isinstance(item, Mapping) or item.get("symbol") != expected_symbol:
-            continue
-        future_mark = Decimal(str(item["future_mark_price"]))
-        spot_mark = Decimal(str(item["spot_mark_price"]))
-        if not valid_price(future_mark) or not valid_price(spot_mark):
-            continue
-        rows.append(
-            {
-                "venue": "coinbase_cfm",
-                "symbol": expected_symbol,
-                "timestamp": _parse_timestamp(str(item["event_time"])),
-                "funding_rate": Decimal(str(item["funding_rate"])),
-                "future_mark_price": future_mark,
-                "spot_mark_price": spot_mark,
-                "fair_value_price": Decimal(str(item["fair_value_price"])),
-                "index_price": None,
-            }
-        )
-    return rows
+def parse_product_funding(payload: object, *, product_id: str) -> list[dict[str, object]]:
+    """Parse funding rate from GET /api/v3/brokerage/products/{product_id} response."""
+    if not isinstance(payload, dict):
+        raise ValueError("Coinbase product response must be a dict")
+    fpd = payload.get("future_product_details")
+    if not isinstance(fpd, dict):
+        return []
+    funding_rate_str = fpd.get("funding_rate")
+    funding_time_str = fpd.get("funding_time")
+    if not funding_rate_str or not funding_time_str:
+        return []
+    mark_price_str = payload.get("price")
+    index_price_str = fpd.get("index_price")
+    if not mark_price_str or not valid_price(Decimal(str(mark_price_str))):
+        return []
+    index_price = Decimal(str(index_price_str)) if index_price_str else None
+    return [
+        {
+            "venue": "coinbase_cfm",
+            "symbol": product_id,
+            "timestamp": _parse_timestamp(str(funding_time_str)),
+            "funding_rate": Decimal(str(funding_rate_str)),
+            "future_mark_price": Decimal(str(mark_price_str)),
+            "spot_mark_price": index_price,
+            "fair_value_price": index_price,
+            "index_price": index_price,
+        }
+    ]
 
 
 def _parse_timestamp(value: str) -> datetime:
