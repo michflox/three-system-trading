@@ -68,6 +68,35 @@ class TrendBacktestResult:
     total_fees: Decimal
 
 
+def trend_target_quantity(
+    *,
+    equity: Decimal,
+    score: Decimal,
+    sigma: Decimal,
+    price: Decimal,
+    config: TrendBacktestConfig,
+) -> Decimal:
+    """Return the exact target quantity shared by trend backtest and paper execution."""
+
+    if any(not value.is_finite() or value <= ZERO for value in (equity, sigma, price)):
+        return ZERO
+    if not score.is_finite() or score < Decimal("-1") or score > Decimal("1"):
+        raise ValueError("trend score must be a finite Decimal in [-1, 1]")
+    raw = (
+        equity
+        * config.target_vol_contribution
+        * score
+        / (sigma * price * SQRT_TRADING_DAYS)
+    )
+    maximum_notional = min(
+        equity * config.per_instrument_leverage_cap,
+        equity * config.allocation_cap,
+    )
+    maximum_quantity = maximum_notional / price
+    target = max(-maximum_quantity, min(maximum_quantity, raw))
+    return target.quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+
+
 class TrendBacktestEngine:
     def __init__(self, config: TrendBacktestConfig) -> None:
         self.config = config
@@ -112,22 +141,13 @@ class TrendBacktestEngine:
                 history = tuple(bar.close for bar in bars[symbol][:index])
                 score = trend_score(history, params)
                 sigma = ewma_volatility(history[-33:], span=32)
-                if sigma <= ZERO:
-                    target = ZERO
-                else:
-                    raw = (
-                        equity_before
-                        * self.config.target_vol_contribution
-                        * score
-                        / (sigma * previous_prices[symbol] * SQRT_TRADING_DAYS)
-                    )
-                    maximum_notional = min(
-                        equity_before * self.config.per_instrument_leverage_cap,
-                        equity_before * self.config.allocation_cap,
-                    )
-                    maximum_quantity = maximum_notional / previous_prices[symbol]
-                    target = max(-maximum_quantity, min(maximum_quantity, raw))
-                    target = target.quantize(Decimal("0.00000001"), rounding=ROUND_DOWN)
+                target = trend_target_quantity(
+                    equity=equity_before,
+                    score=score,
+                    sigma=sigma,
+                    price=previous_prices[symbol],
+                    config=self.config,
+                )
                 current = positions[symbol]
                 if (
                     current != ZERO

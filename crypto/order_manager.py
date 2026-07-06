@@ -154,12 +154,19 @@ class OrderManager:
             self._apply_mapping(payload)
 
     async def reconcile(self, adapter: CryptoBrokerAdapter) -> None:
-        open_orders = await adapter.get_open_orders()
-        snapshots: Sequence[BrokerOrder] = open_orders
-        history_method = getattr(adapter, "get_order_history", None)
-        if history_method is not None:
-            historical = cast(HistoricalOrders, adapter)
-            snapshots = await historical.get_order_history()
+        await self.reconcile_many((adapter,))
+
+    async def reconcile_many(self, adapters: Sequence[CryptoBrokerAdapter]) -> None:
+        """Reconcile an aggregate venue snapshot before marking unseen orders unknown."""
+
+        snapshots: list[BrokerOrder] = []
+        for adapter in adapters:
+            venue_snapshots: Sequence[BrokerOrder] = await adapter.get_open_orders()
+            history_method = getattr(adapter, "get_order_history", None)
+            if history_method is not None:
+                historical = cast(HistoricalOrders, adapter)
+                venue_snapshots = await historical.get_order_history()
+            snapshots.extend(venue_snapshots)
         seen: set[str] = set()
         for order in snapshots:
             seen.add(order.client_order_id)

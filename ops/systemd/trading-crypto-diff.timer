@@ -1,0 +1,11 @@
+[Unit]
+Description=Run crypto paper live-versus-backtest diff daily
+
+[Timer]
+OnCalendar=*-*-* 00:15:00 UTC
+Persistent=true
+AccuracySec=1s
+Unit=trading-crypto-diff.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Check crypto recorder data quality daily
+
+[Timer]
+OnCalendar=*-*-* 00:12:00 UTC
+Persistent=true
+AccuracySec=1s
+Unit=trading-crypto-quality.service
+
+[Install]
+WantedBy=timers.target

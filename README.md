@@ -55,3 +55,17 @@ pytest
 mypy core/
 ruff check .
 ```
+
+## Crypto paper deployment gate
+
+The crypto trend service starts in `DRY_RUN`, evaluates the pure strategy at 00:05 UTC, sends every
+candidate order through the shared `RiskManager`, routes only approved orders, and submits only in
+`PAPER`. The deployment command rejects `LIVE` unconditionally; LIVE remains human-only and is not
+enabled by this repository.
+
+Operational promotion requires 48 continuous clean hours of DRY_RUN followed by at least eight
+uninterrupted weeks of PAPER. Assuming DRY_RUN begins 2026-07-05 and PAPER begins 2026-07-07, the
+earliest permitted date for any LIVE discussion is **2026-09-01**. A later or interrupted PAPER
+start moves that date to 56 days after the actual uninterrupted PAPER start. See
+`ops/paper_deployment_status.md`; local automated tests do not substitute for server-duration
+evidence.

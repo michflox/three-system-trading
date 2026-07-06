@@ -1,0 +1,18 @@
+{
+  "arm_file": "arm.live",
+  "arm_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "crypto_stale_seconds": 120,
+  "instrument_position_caps": {
+    "BTC-USD": "10",
+    "ETH-USD": "200"
+  },
+  "live_enabled": false,
+  "max_order_notional_fraction": "0.25",
+  "strategy_allocation_caps": {
+    "trend_ts": "25000"
+  },
+  "venue_capital_caps": {
+    "coinbase": "50000",
+    "kraken": "25000"
+  }
+}

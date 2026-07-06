@@ -1,0 +1,18 @@
+[Unit]
+Description=Daily crypto paper live-versus-backtest diff
+After=trading-crypto-paper.service trading-data-recorder.service
+
+[Service]
+Type=oneshot
+User=tradingbot
+Group=tradingbot
+WorkingDirectory=/opt/trading-bot
+EnvironmentFile=/etc/trading-bot/crypto-paper.env
+ExecStart=/opt/trading-bot/.venv/bin/python -m engines.crypto_paper_engine diff
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/trading-bot /var/log/trading-bot
+StandardOutput=journal
+StandardError=journal

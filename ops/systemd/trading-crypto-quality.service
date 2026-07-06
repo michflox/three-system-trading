@@ -1,0 +1,18 @@
+[Unit]
+Description=Alert on crypto recorder data-quality failures
+After=trading-data-recorder.service
+
+[Service]
+Type=oneshot
+User=tradingbot
+Group=tradingbot
+WorkingDirectory=/opt/trading-bot
+EnvironmentFile=/etc/trading-bot/crypto-paper.env
+ExecStart=/opt/trading-bot/.venv/bin/python -m engines.crypto_paper_engine quality
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/trading-bot /var/log/trading-bot
+StandardOutput=journal
+StandardError=journal

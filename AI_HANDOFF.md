@@ -2,7 +2,7 @@
 
 **Generated:** 2026-07-05  
 **Branch:** main  
-**Status:** Prompt 1.6 complete — authenticated-fee IS complete; one-shot OOS consumed and signed off
+**Status:** Prompt 1.6 complete; Prompt 1.7 implementation complete with Ubuntu duration gates pending
 
 ## Repository State
 
@@ -84,4 +84,14 @@ permitted.
 ## Next Engineering Step
 
 Prompt 1.6 is closed. Do not rerun `--consume-oos` and do not use the consumed OOS period for
-further Trend TS development. Continue with the next separately authorized prompt.
+further Trend TS development.
+
+Prompt 1.7 now includes the DRY_RUN/PAPER-only crypto engine, persistent restart reconciliation,
+Telegram monitoring, systemd service/timers, and daily live-vs-backtest diff. Automated tests pass,
+including a simulated mid-cycle death and restart with aggregate multi-venue reconciliation.
+
+Operational acceptance is still pending on the Ubuntu server: run 48 continuous clean DRY_RUN
+hours, perform and document the real systemd kill drill, then let a human switch the environment to
+PAPER. PAPER must remain uninterrupted for eight weeks. The earliest possible LIVE discussion date
+is 2026-09-01, and moves later if PAPER starts after 2026-07-07 or is interrupted. The agent must
+never enable LIVE.
