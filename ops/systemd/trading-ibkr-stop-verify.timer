@@ -1,0 +1,11 @@
+[Unit]
+Description=Run IBKR paper futures stop verification daily
+
+[Timer]
+OnCalendar=*-*-* 15:00:00 UTC
+Persistent=true
+AccuracySec=1s
+Unit=trading-ibkr-stop-verify.service
+
+[Install]
+WantedBy=timers.target

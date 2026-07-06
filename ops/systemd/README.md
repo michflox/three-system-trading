@@ -53,3 +53,27 @@ The daily strategy cycle is scheduled internally for 00:05 UTC. The quality time
 UTC and the live-vs-backtest diff timer at 00:15 UTC. Timer `Persistent=true` causes a missed
 oneshot to run after the server returns. Telegram alerts cover position changes, risk vetoes,
 venue health transitions, data-quality failures, and excess model divergence.
+
+## IBKR paper futures stop verification
+
+IB Gateway must accept API socket clients on the paper session. Port `4002` is the documented IB
+Gateway paper default; set the actual paper port in `/etc/trading-bot/ibkr-paper.env` if the local
+Gateway differs. The adapter refuses startup unless the configured account and every account
+exposed by Gateway are `DU` paper accounts.
+
+1. Copy `ibkr-paper.env.example` to `/etc/trading-bot/ibkr-paper.env`, owned by `root` with mode
+   `0600`, and set the paper account ID. Never put credentials in a unit or repository file.
+2. Copy `trading-ibkr-stop-verify.service` and `.timer` to `/etc/systemd/system/`, then run
+   `systemctl daemon-reload` and `systemctl enable --now trading-ibkr-stop-verify.timer`.
+3. Start the service once and inspect
+   `/var/lib/trading-bot/reports/ibkr-stop-verification-latest.json`. A nonzero exit means at
+   least one supported open futures position lacks exact broker-resident stop coverage.
+4. With a running paper Gateway and current contract months, run the opt-in read-only test:
+   `RUN_LIVE_IBKR_TESTS=1 pytest -m live_ibkr
+   tests/integration/test_ibkr_live_paper.py`. It qualifies contracts and reads account state but
+   places no orders.
+
+The persistent timer runs a missed check after restart. Connectivity codes 1100, 1101, 1102, and
+1300 trigger fail-closed reconnect behavior. An order retry never continues outside the fixed UTC
+execution window. Market fallback requires a second `RiskManager` approval and confirmed limit
+cancellation.

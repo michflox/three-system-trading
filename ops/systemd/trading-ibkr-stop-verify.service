@@ -1,0 +1,19 @@
+[Unit]
+Description=Verify broker-resident IBKR paper futures catastrophe stops
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=tradingbot
+Group=tradingbot
+WorkingDirectory=/opt/trading-bot
+EnvironmentFile=/etc/trading-bot/ibkr-paper.env
+ExecStart=/opt/trading-bot/.venv/bin/python -m adapters.ibkr verify-stops
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/trading-bot
+StandardOutput=journal
+StandardError=journal

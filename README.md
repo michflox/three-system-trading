@@ -69,3 +69,17 @@ earliest permitted date for any LIVE discussion is **2026-09-01**. A later or in
 start moves that date to 56 days after the actual uninterrupted PAPER start. See
 `ops/paper_deployment_status.md`; local automated tests do not substitute for server-duration
 evidence.
+
+## IBKR micro-futures paper boundary
+
+`adapters.ibkr` supports MES, MNQ, M2K, MYM, MGC, MHG, MCL, MNG, M6E, M6B, and M6A through
+`ib_async` and IB Gateway. It is paper-only: configuration and Gateway account discovery fail
+closed if a non-`DU` account is present. Every submitted order accepts only an `Approved` result
+from the shared `RiskManager`; fixed-window market fallback needs a separate approval and confirmed
+limit cancellation.
+
+Catastrophe exits are exact 3xATR(20) broker-resident GTC stop orders. A daily systemd timer checks
+that every supported open futures position has matching stop direction and quantity. Continuous
+series use explicit CME-derived contract calendars, roll three to five business days before the
+earlier of first notice or expiry, and backward Panama adjustment. See `ops/systemd/README.md` for
+the paper-Gateway verification procedure. No LIVE futures operation is enabled here.

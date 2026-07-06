@@ -95,3 +95,17 @@ hours, perform and document the real systemd kill drill, then let a human switch
 PAPER. PAPER must remain uninterrupted for eight weeks. The earliest possible LIVE discussion date
 is 2026-09-01, and moves later if PAPER starts after 2026-07-07 or is interrupted. The agent must
 never enable LIVE.
+
+## Prompt 2.1 status
+
+The code boundary is implemented for the eleven requested IBKR micro futures: paper-only contract
+qualification, approved limit/market/stop submission, persistent idempotency, positions/account
+values, daily-restart reconnect handling, and exact broker-resident 3xATR(20) stop verification.
+Deterministic CME-derived roll calendars, backward-Panama adjustment, and simulated position-roll
+continuity are covered by tests. A systemd daily verification timer and paper environment template
+are under `ops/systemd/`.
+
+Local mocked integration and calendar tests pass. Operational acceptance remains pending until the
+opt-in read-only integration test is run against a real IB Gateway paper session and its output is
+recorded; the local suite correctly skips that test without explicit paper credentials and a
+running Gateway. No orders are placed by that integration test, and no LIVE account is supported.
