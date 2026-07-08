@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -24,6 +25,8 @@ import httpx
 import websockets
 
 from data.quality import valid_price
+
+LOGGER = logging.getLogger("market-data-recorder")
 
 COINBASE_EXCHANGE_REST = "https://api.exchange.coinbase.com"
 COINBASE_ADVANCED_REST = "https://api.coinbase.com"
@@ -201,7 +204,15 @@ class CoinbaseWebSocketClient:
     async def _listen(self, socket: Any, stop: asyncio.Event) -> None:
         while not stop.is_set():
             message = json.loads(await socket.recv())
-            if message.get("channel") != "l2_data":
+            channel = message.get("channel")
+            if channel != "l2_data":
+                # Diagnostic only: surface subscription rejections/errors that
+                # would otherwise be silently dropped here, since a healthy
+                # subscribe also produces non-data control messages
+                # (e.g. "subscriptions", "heartbeats").
+                LOGGER.info(
+                    "coinbase websocket non-l2_data message: channel=%r %r", channel, message
+                )
                 continue
             for event in message.get("events", []):
                 for update in event.get("updates", []):

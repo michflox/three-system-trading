@@ -19,8 +19,13 @@ class HealthState(StrEnum):
 @dataclass(frozen=True, slots=True)
 class HealthPolicy:
     check_interval: timedelta = timedelta(seconds=30)
-    ws_stale_after: timedelta = timedelta(seconds=45)
-    book_stale_after: timedelta = timedelta(seconds=10)
+    # book/ws thresholds must exceed the recorder's per-symbol top-of-book write
+    # cadence (currently one sample per minute per venue; see
+    # data/feeds/coinbase.py and data/feeds/kraken.py _sample()), or a healthy
+    # feed reads as stale on almost every 30s check. 90s tolerates one missed
+    # sample; 2x (severe) tolerates two before escalating to FAILED.
+    ws_stale_after: timedelta = timedelta(seconds=90)
+    book_stale_after: timedelta = timedelta(seconds=90)
     rest_stale_after: timedelta = timedelta(seconds=45)
     error_window: timedelta = timedelta(minutes=5)
     degraded_error_rate: float = 0.20
