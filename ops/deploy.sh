@@ -226,9 +226,15 @@ cat <<'CHECKLIST'
      (No trading. No withdrawal. No transfer.)
   4. Download the replacement JSON; extract maker_fee_rate via:
        GET /api/v3/brokerage/transaction_summary   (authenticated)
-  5. Note: the existing adapter (CdpJwtAuth) requires an EC private
-     key in PEM format. If your new key is Ed25519, the adapter
-     must be updated before it can authenticate.
+  5. CdpJwtAuth accepts either an EC or Ed25519 PEM private key natively.
+     If your key JSON gives a raw (non-PEM) base64 privateKey instead of
+     PEM, the adapter does NOT support that format yet — stop and get a
+     PEM-formatted key, or the key parse will fail with a PEM framing
+     error (ValueError: Unable to load PEM file).
+  6. Multi-line PEM secrets in an EnvironmentFile must use double-quoted
+     real line breaks, not "\n"-escaped single-line text — systemd's
+     EnvironmentFile= parser strips "\n" escapes silently. See
+     ops/systemd/data-recorder.env.example.
 
 [SECRETS] Edit /etc/trading-bot/crypto-paper.env  (mode 0600)
   Required values:

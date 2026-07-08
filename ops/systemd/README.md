@@ -14,11 +14,32 @@ Before enabling the recorder:
 3. Create the `tradingbot` system user and `/var/lib/trading-bot` owned by that user.
 4. Copy `data-recorder.env.example` to `/etc/trading-bot/data-recorder.env` (owner `root`, mode
    `0600`). Set `COINBASE_API_KEY` and `COINBASE_API_SECRET`. Verify CFM contract symbols.
+
+   **Multi-line PEM secrets must use real line breaks inside double quotes, not a `\n`-escaped
+   single line.** systemd's `EnvironmentFile=` parser (systemd >= 253, e.g. Ubuntu 24.04's systemd
+   255) applies shell-like backslash escaping and silently strips a literal `\n`, corrupting the
+   key with no error until the service actually starts — a manual `source`-based test will not
+   catch this, since plain shell `source` does not do the same escaping. See the comment in
+   `data-recorder.env.example` for the correct quoted multi-line format. Verify the parsed value
+   the way systemd will actually read it, e.g.:
+   ```
+   systemd-run --uid=tradingbot --gid=tradingbot --pipe --wait \
+     -p "EnvironmentFile=/etc/trading-bot/data-recorder.env" \
+     /opt/trading-bot/.venv/bin/python3 -c "
+   import os
+   from cryptography.hazmat.primitives import serialization
+   v = os.environ.get('COINBASE_API_SECRET', '').encode()
+   key = serialization.load_pem_private_key(v, password=None)
+   print('PEM_LOAD=SUCCESS', type(key).__name__)
+   "
+   ```
 5. Test the permission gate manually before enabling the unit:
    ```
    COINBASE_API_KEY=... COINBASE_API_SECRET=... python -m data.recorder backfill
    ```
-   Confirm it completes and `status/backfill-complete.json` is written.
+   Confirm it completes and `status/backfill-complete.json` is written. Note this manual test uses
+   plain shell env-var passing, not `EnvironmentFile=` — passing it does not guarantee the real
+   systemd unit will parse the same value correctly; use the `systemd-run` check above too.
 6. Copy `trading-data-recorder.service` to `/etc/systemd/system/`, run
    `systemctl daemon-reload`, then `systemctl enable --now trading-data-recorder`.
 7. Confirm `status/funding-recorder.json` advances hourly and inspect the daily quality report.

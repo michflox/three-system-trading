@@ -1,8 +1,8 @@
 # AI Handoff Document
 
-**Generated:** 2026-07-05  
+**Generated:** 2026-07-05 (last updated 2026-07-08)
 **Branch:** main  
-**Status:** Prompt 1.6 complete; Prompt 1.7 implementation complete with Ubuntu duration gates pending
+**Status:** Prompt 1.6 complete; Prompt 1.7 deployed to Ubuntu, 48-hour DRY_RUN clock running (not yet complete)
 
 ## Repository State
 
@@ -75,9 +75,11 @@ permitted.
 
 - The user confirmed on 2026-07-05 that the previously exposed Coinbase key was revoked.
 - Local credentials are stored only in ignored `.env`; never commit or log them.
-- The new read-only Coinbase key uses Ed25519. The current Coinbase adapter signer accepts only
-  ECDSA PEM keys, so adapter compatibility must be addressed separately before using that key in
-  runtime infrastructure.
+- `CdpJwtAuth` (`crypto/adapters/coinbase.py`) accepts either an EC or Ed25519 PEM private key
+  natively — confirmed by direct code inspection 2026-07-08, correcting an earlier note in this
+  file that said Ed25519 needed separate adapter work. It does NOT support a raw (non-PEM) base64
+  key; if a CDP key JSON gives only `id` + a non-PEM `privateKey`, that key format isn't usable
+  as-is (see "Ubuntu deployment" section below).
 - Never enable LIVE mode. LIVE activation remains a human-only action.
 - Re-verify the Kraken fee schedule before any Kraken paper or live use.
 
@@ -90,10 +92,37 @@ Prompt 1.7 now includes the DRY_RUN/PAPER-only crypto engine, persistent restart
 Telegram monitoring, systemd service/timers, and daily live-vs-backtest diff. Automated tests pass,
 including a simulated mid-cycle death and restart with aggregate multi-venue reconciliation.
 
-Operational acceptance is still pending on the Ubuntu server: run 48 continuous clean DRY_RUN
-hours, perform and document the real systemd kill drill, then let a human switch the environment to
-PAPER. PAPER must remain uninterrupted for eight weeks. The earliest possible LIVE discussion date
-is 2026-09-01, and moves later if PAPER starts after 2026-07-07 or is interrupted. The agent must
+## Ubuntu deployment (2026-07-08)
+
+Deployed to `trading-bot-01` (DigitalOcean, 165.22.196.24) — the server previously hosting the
+Hyperliquid whale-tracker bot, which was retired first: stopped, disabled, and archived to
+`/opt/archive/Hyperliquid-Whale-Tracker-20260708-033052` (confirmed no Hyperliquid processes
+remain). `ops/deploy.sh` bootstrap ran clean on a fresh `/opt/trading-bot` install.
+
+`trading-data-recorder.service` and `trading-crypto-paper.service` are both `active`,
+`TRADING_EXECUTION_MODE=DRY_RUN` confirmed locked. See `ops/paper_deployment_status.md` for the
+live gate table.
+
+Deployment surfaced a real, reproducible bug, not a one-off paste error: systemd's
+`EnvironmentFile=` parser (systemd ≥ 253, confirmed on Ubuntu 24.04's systemd 255) applies
+shell-like backslash escaping and silently strips a `\n`-escaped single-line PEM secret before the
+process ever sees it, corrupting `COINBASE_API_SECRET` on every real service start — this passed
+undetected through manual `source`-based testing, which doesn't apply the same escaping, so the
+smoke test kept succeeding while the actual systemd unit kept failing (14 restart attempts before
+diagnosis). Fixed at the deployment/config level only — store the PEM as a double-quoted,
+real-multi-line value in `/etc/trading-bot/data-recorder.env` instead of a `\n`-escaped single
+line — verified via `systemd-run` under the exact sandboxed mechanism the unit uses before
+re-enabling it. No code, architecture, or trading logic was changed. `ops/systemd/README.md`,
+`ops/systemd/data-recorder.env.example`, and `ops/deploy.sh`'s post-install checklist were updated
+so this isn't rediscovered on the next redeploy.
+
+Operational acceptance is still pending: 48 continuous clean DRY_RUN hours (**in progress**,
+started 2026-07-08 05:13:21 UTC, not complete — do not treat as passed before roughly
+2026-07-10 05:13 UTC with zero interruptions), the real systemd kill drill (not yet performed on
+the server), then a human switch to PAPER. PAPER must remain uninterrupted for eight weeks. The
+original 2026-09-01 LIVE-discussion estimate assumed PAPER starting 2026-07-07 and no longer
+holds since DRY_RUN itself only started 2026-07-08; the earliest possible LIVE discussion date is
+56 days after the actual uninterrupted PAPER start, once that start happens. The agent must
 never enable LIVE.
 
 ## Prompt 2.1 status
