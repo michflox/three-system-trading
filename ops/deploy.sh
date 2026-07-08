@@ -271,9 +271,9 @@ cat <<'CHECKLIST'
         /etc/trading-bot/crypto-paper.env
     systemctl restart trading-crypto-paper.service
 
-  Earliest LIVE discussion: 2026-09-01
-  (moves to 56 days after actual PAPER start if PAPER starts later
-  or is interrupted)
+  Earliest LIVE discussion: 56 days after the actual uninterrupted PAPER start
+  (the original 2026-09-01 estimate assumed PAPER starting 2026-07-07 and no
+  longer holds — see ops/paper_deployment_status.md for current status)
 
   THE AGENT NEVER ENABLES LIVE. Live mode is a human-only action.
 

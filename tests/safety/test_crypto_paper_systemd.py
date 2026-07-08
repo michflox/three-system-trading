@@ -39,6 +39,8 @@ def test_readme_records_eight_week_gate_and_honest_operational_status() -> None:
     root = Path(__file__).parents[2]
     readme = (root / "README.md").read_text(encoding="utf-8")
     status = (root / "ops/paper_deployment_status.md").read_text(encoding="utf-8")
-    assert "2026-09-01" in readme
+    assert "56 days" in readme
+    assert "uninterrupted PAPER start" in readme
     assert "at least eight" in readme
-    assert "PENDING UBUNTU DEPLOYMENT" in status
+    assert "IN PROGRESS" in status
+    assert "2026-07-08 05:13:21 UTC" in status

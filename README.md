@@ -64,9 +64,10 @@ candidate order through the shared `RiskManager`, routes only approved orders, a
 enabled by this repository.
 
 Operational promotion requires 48 continuous clean hours of DRY_RUN followed by at least eight
-uninterrupted weeks of PAPER. Assuming DRY_RUN begins 2026-07-05 and PAPER begins 2026-07-07, the
-earliest permitted date for any LIVE discussion is **2026-09-01**. A later or interrupted PAPER
-start moves that date to 56 days after the actual uninterrupted PAPER start. See
+uninterrupted weeks of PAPER. Ubuntu deployment began 2026-07-08 (DRY_RUN clock started
+05:13:21 UTC), superseding the original planning assumption of DRY_RUN beginning 2026-07-05 and
+PAPER beginning 2026-07-07 — the earliest permitted date for any LIVE discussion is **56 days
+after the actual uninterrupted PAPER start**, not yet set since PAPER has not started. See
 `ops/paper_deployment_status.md`; local automated tests do not substitute for server-duration
 evidence.
 
