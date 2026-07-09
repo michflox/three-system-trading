@@ -236,20 +236,12 @@ def test_level2_subscribe_includes_jwt_and_applies_l2_data(
             "channel": "l2_data",
             "events": [
                 {
+                    "type": "snapshot",
+                    "product_id": "BTC-USD",
                     "updates": [
-                        {
-                            "product_id": "BTC-USD",
-                            "side": "bid",
-                            "price_level": "100",
-                            "new_quantity": "1",
-                        },
-                        {
-                            "product_id": "BTC-USD",
-                            "side": "offer",
-                            "price_level": "101",
-                            "new_quantity": "2",
-                        },
-                    ]
+                        {"side": "bid", "price_level": "100", "new_quantity": "1"},
+                        {"side": "offer", "price_level": "101", "new_quantity": "2"},
+                    ],
                 }
             ],
         },
@@ -300,6 +292,130 @@ def test_heartbeats_are_not_logged_and_subscription_confirmed_once(
         r for r in caplog.records if "subscription confirmed" in r.getMessage()
     ]
     assert len(subscription_logs) == 1
+
+
+def _run_listen_briefly(
+    client: CoinbaseWebSocketClient,
+    fake_socket: "_FakeWsSocket",
+    *,
+    timeout: float = 0.2,
+) -> None:
+    stop = asyncio.Event()
+
+    async def exercise() -> None:
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(client._listen(fake_socket, stop), timeout=timeout)
+
+    asyncio.run(exercise())
+
+
+def test_level2_snapshot_populates_book() -> None:
+    # Exact envelope shape captured by a live diagnostic probe against
+    # wss://advanced-trade-ws.coinbase.com (2026-07-09T02:34 UTC): product_id
+    # lives on the event, not on individual updates.
+    messages = [
+        {
+            "channel": "l2_data",
+            "events": [
+                {
+                    "type": "snapshot",
+                    "product_id": "ETH-USD",  # untracked -- client only tracks BTC-USD
+                    "updates": [
+                        {"side": "bid", "price_level": "3000", "new_quantity": "1"},
+                    ],
+                },
+                {
+                    "type": "snapshot",
+                    "product_id": "BTC-USD",
+                    "updates": [
+                        {"side": "bid", "price_level": "61840.25", "new_quantity": "0.0108082"},
+                        {"side": "offer", "price_level": "61841.00", "new_quantity": "0.02"},
+                    ],
+                },
+            ],
+        },
+    ]
+    fake_socket = _FakeWsSocket(messages)
+    client = CoinbaseWebSocketClient(symbols=("BTC-USD",))
+    _run_listen_briefly(client, fake_socket)
+
+    # Untracked product_id never gets a book key at all -- and does not
+    # prevent the tracked event listed after it from being applied.
+    assert "ETH-USD" not in client._bids
+    assert "ETH-USD" not in client._asks
+    assert client._bids["BTC-USD"][Decimal("61840.25")] == Decimal("0.0108082")
+    assert client._asks["BTC-USD"][Decimal("61841.00")] == Decimal("0.02")
+
+
+def test_level2_update_applies_delta_after_snapshot() -> None:
+    messages = [
+        {
+            "channel": "l2_data",
+            "events": [
+                {
+                    "type": "snapshot",
+                    "product_id": "BTC-USD",
+                    "updates": [
+                        {"side": "bid", "price_level": "100", "new_quantity": "1"},
+                        {"side": "offer", "price_level": "101", "new_quantity": "2"},
+                    ],
+                }
+            ],
+        },
+        {
+            "channel": "l2_data",
+            "events": [
+                {
+                    "type": "update",
+                    "product_id": "BTC-USD",
+                    "updates": [
+                        {"side": "bid", "price_level": "100", "new_quantity": "5"},
+                        {"side": "bid", "price_level": "99.5", "new_quantity": "3"},
+                        {"side": "offer", "price_level": "101", "new_quantity": "0"},
+                    ],
+                }
+            ],
+        },
+    ]
+    fake_socket = _FakeWsSocket(messages)
+    client = CoinbaseWebSocketClient(symbols=("BTC-USD",))
+    _run_listen_briefly(client, fake_socket)
+
+    assert client._bids["BTC-USD"][Decimal("100")] == Decimal("5")
+    assert client._bids["BTC-USD"][Decimal("99.5")] == Decimal("3")
+    assert Decimal("101") not in client._asks["BTC-USD"]
+
+
+def test_sample_produces_top_of_book_row_from_populated_book(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _no_sleep() -> None:
+        return None
+
+    monkeypatch.setattr("data.feeds.coinbase._sleep_to_next_minute", _no_sleep)
+
+    client = CoinbaseWebSocketClient(symbols=("BTC-USD",))
+    client._bids["BTC-USD"][Decimal("100")] = Decimal("1")
+    client._asks["BTC-USD"][Decimal("102")] = Decimal("2")
+
+    stop = asyncio.Event()
+    received: list[dict[str, object]] = []
+
+    async def callback(row: dict[str, object]) -> None:
+        received.append(row)
+        stop.set()
+
+    asyncio.run(client._sample(callback, stop))
+
+    assert len(received) == 1
+    row = received[0]
+    assert row["venue"] == "coinbase"
+    assert row["symbol"] == "BTC-USD"
+    assert row["bid_price"] == Decimal("100")
+    assert row["bid_size"] == Decimal("1")
+    assert row["ask_price"] == Decimal("102")
+    assert row["ask_size"] == Decimal("2")
+    assert isinstance(row["timestamp"], datetime)
 
 
 def test_kraken_parser_drops_documented_uncommitted_last_candle() -> None:

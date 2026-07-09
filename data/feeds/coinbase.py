@@ -242,10 +242,15 @@ class CoinbaseWebSocketClient:
                 self._l2_data_confirmed = True
                 LOGGER.info("coinbase websocket receiving l2_data")
             for event in message.get("events", []):
+                # product_id is on the event, not on individual updates --
+                # verified against a live captured snapshot message
+                # (2026-07-09): {"type": "snapshot", "product_id": "BTC-USD",
+                # "updates": [...]}. Reading it per-update always returned
+                # None, silently discarding every update.
+                symbol = event.get("product_id")
+                if symbol not in self._bids:
+                    continue
                 for update in event.get("updates", []):
-                    symbol = update.get("product_id")
-                    if symbol not in self._bids:
-                        continue
                     price = Decimal(str(update["price_level"]))
                     quantity = Decimal(str(update["new_quantity"]))
                     side = str(update["side"]).lower()
