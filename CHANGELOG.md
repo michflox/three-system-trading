@@ -3,6 +3,31 @@
 Concise technical summary of completed milestones, newest first. This file starts 2026-07-08;
 earlier history is in `git log` and `AI_HANDOFF.md`.
 
+## 2026-07-09 — Coinbase feed bugs fixed, Kraken authenticated, DRY_RUN clock restarted
+
+- Fixed two independent, latent Coinbase `level2` websocket bugs found via production diagnosis:
+  (1) the subscribe message was missing JWT auth, so Coinbase silently accepted the subscription
+  but never sent `l2_data` (`bc9824bf`); (2) `_listen()` read `product_id` from individual update
+  objects instead of the parent event, always getting `None` and silently discarding every book
+  update even after auth started working (`08cac02b`). Diagnosed via a one-off raw-message probe
+  script (not the deployed service) that captured Coinbase's actual `l2_data` envelope shape.
+- Fixed a third, related bug: Coinbase's REST candle parser didn't drop the still-forming last
+  candle, asymmetric with Kraken's parser and a latent phantom-signal risk (`1f8ac322`).
+- Verified in production post-fix: 63 real Coinbase `top_of_book` rows landed over a 20-minute
+  window (21/symbol), Coinbase health `FAILED → HEALTHY` and stable, Kraken unaffected throughout.
+- Onboarded an authenticated, trade-enabled (no withdrawal) Kraken key via a standalone probe:
+  adapter instantiation, `verify_permissions()` guard, persistent nonce continuity across separate
+  processes, and an authenticated `Balance` call all verified — without wiring `KrakenAdapter` into
+  any deployed service (recorded as a deferred follow-up in `TODO.md`).
+- Recalculated the CFM funding-carry GO/NO-GO date: original 2026-09-04 (assumed clean collection
+  from 2026-07-06) revised to **2026-09-06** (actual first funding row `2026-07-08T06:00:00 UTC` +
+  60 days) — the funding REST path was never affected by the two websocket bugs above (69 rows,
+  zero gaps since the first row); the date moved because the recorder's first successful start was
+  delayed two days by the earlier (already-fixed) systemd `EnvironmentFile=` PEM-parsing issue.
+- Restarted both services for a clean DRY_RUN clock start (recorder `2026-07-09 04:29:45 UTC`,
+  paper engine `2026-07-09 04:29:50 UTC`) that supersedes both prior 2026-07-08 restarts. See
+  `ops/paper_deployment_status.md` for the full journal entry.
+
 ## 2026-07-08 — Ubuntu deployment executed, DRY_RUN clock started
 
 - Retired the Hyperliquid whale-tracker deployment on `trading-bot-01` (DigitalOcean,
