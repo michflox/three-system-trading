@@ -286,14 +286,32 @@ class CoinbaseWebSocketClient:
                 )
 
 
-def parse_spot_candles(payload: object, *, symbol: str, interval: str) -> list[dict[str, object]]:
+_CANDLE_GRANULARITY = {"1h": timedelta(hours=1), "1d": timedelta(days=1)}
+
+
+def parse_spot_candles(
+    payload: object, *, symbol: str, interval: str, now: datetime | None = None
+) -> list[dict[str, object]]:
     if not isinstance(payload, list):
         raise ValueError("Coinbase candles response must be a list")
+    granularity = _CANDLE_GRANULARITY[interval]
+    current_time = now or datetime.now(UTC)
     rows: list[dict[str, object]] = []
     previous: Decimal | None = None
     for candle in sorted(payload, key=lambda item: item[0] if isinstance(item, list) else 0):
         if not isinstance(candle, list) or len(candle) < 6:
             raise ValueError("malformed Coinbase candle")
+        candle_start = datetime.fromtimestamp(int(candle[0]), tz=UTC)
+        if candle_start + granularity > current_time:
+            # The Coinbase Exchange candles endpoint includes the still-forming
+            # candle when the query range reaches "now" (verified live
+            # 2026-07-09: querying up to now returned a row starting at the
+            # current, not-yet-closed hour). Only a fully closed candle is
+            # valid data -- mirrors Kraken's documented uncommitted-last-row
+            # exclusion, but time-boundary-based rather than unconditional,
+            # since a historical backfill page's last row is often a
+            # legitimately closed candle that must not be dropped.
+            continue
         close = Decimal(str(candle[4]))
         if not valid_price(close, previous):
             continue
@@ -303,7 +321,7 @@ def parse_spot_candles(payload: object, *, symbol: str, interval: str) -> list[d
                 "venue": "coinbase",
                 "symbol": symbol,
                 "interval": interval,
-                "timestamp": datetime.fromtimestamp(int(candle[0]), tz=UTC),
+                "timestamp": candle_start,
                 "low": Decimal(str(candle[1])),
                 "high": Decimal(str(candle[2])),
                 "open": Decimal(str(candle[3])),

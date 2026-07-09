@@ -35,6 +35,24 @@ def test_coinbase_candle_schema_and_chronological_sort() -> None:
     assert rows[1]["volume"] == D("2.5")
 
 
+def test_coinbase_parser_drops_documented_uncommitted_last_candle() -> None:
+    # Values are the real shape returned by a live query against
+    # https://api.exchange.coinbase.com/products/BTC-USD/candles (verified
+    # 2026-07-09T02:23 UTC): querying up to "now" includes a row starting at
+    # the current, not-yet-closed hour (02:00) alongside the prior closed
+    # hour (01:00).
+    now = datetime(2026, 7, 9, 2, 30, tzinfo=UTC)
+    payload = [
+        [1783562400, "61754.62", "62070.42", "61856.66", "62016.99", "85.86017492"],
+        [1783558800, "61774.92", "62596.59", "62084.54", "61856.65", "353.88548692"],
+    ]
+    rows = parse_coinbase(payload, symbol="BTC-USD", interval="1h", now=now)
+    assert len(rows) == 1
+    assert rows[0]["symbol"] == "BTC-USD"
+    assert rows[0]["timestamp"] == datetime(2026, 7, 9, 1, tzinfo=UTC)
+    assert rows[0]["close"] == D("61856.65")
+
+
 def test_coinbase_cfm_funding_preserves_official_mark_fields() -> None:
     rows = parse_product_funding(
         {
