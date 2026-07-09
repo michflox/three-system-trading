@@ -58,6 +58,16 @@ class _RestAuth(Protocol):
     def rest_token(self, method: str, path: str) -> str: ...
 
 
+class _WsAuth(Protocol):
+    """Structural type accepted by CoinbaseWebSocketClient for an authenticated
+    level2 subscribe. CdpJwtAuth from crypto.adapters.coinbase satisfies this
+    protocol; the data module does not import from crypto to avoid a layering
+    dependency.
+    """
+
+    def websocket_token(self) -> str: ...
+
+
 class CoinbaseRestClient:
     def __init__(
         self,
@@ -177,11 +187,13 @@ class CoinbaseRestClient:
 class CoinbaseWebSocketClient:
     """Maintain Coinbase level2 books and emit one top-of-book row per minute."""
 
-    def __init__(self, symbols: Sequence[str] = SPOT_SYMBOLS) -> None:
+    def __init__(self, symbols: Sequence[str] = SPOT_SYMBOLS, auth: _WsAuth | None = None) -> None:
         self.symbols = tuple(symbols)
+        self._auth = auth
         self._bids: dict[str, dict[Decimal, Decimal]] = {symbol: {} for symbol in symbols}
         self._asks: dict[str, dict[Decimal, Decimal]] = {symbol: {} for symbol in symbols}
         self._last_prices: dict[str, Decimal] = {}
+        self._l2_data_confirmed = False
 
     async def record(self, callback: RowCallback, stop: asyncio.Event) -> None:
         async with websockets.connect(
@@ -191,11 +203,18 @@ class CoinbaseWebSocketClient:
             max_queue=4096,
             max_size=8 * 1024 * 1024,  # Coinbase l2_data snapshots can exceed the 1MB default
         ) as socket:
-            await socket.send(
-                json.dumps(
-                    {"type": "subscribe", "product_ids": list(self.symbols), "channel": "level2"}
-                )
-            )
+            level2_subscribe: dict[str, object] = {
+                "type": "subscribe",
+                "product_ids": list(self.symbols),
+                "channel": "level2",
+            }
+            # level2 requires an authenticated JWT to actually receive data; an
+            # unauthenticated subscribe is accepted (no error) but silently
+            # never delivers l2_data. Never log level2_subscribe itself once
+            # the jwt key is present.
+            if self._auth is not None:
+                level2_subscribe["jwt"] = self._auth.websocket_token()
+            await socket.send(json.dumps(level2_subscribe))
             await socket.send(json.dumps({"type": "subscribe", "channel": "heartbeats"}))
             async with asyncio.TaskGroup() as group:
                 group.create_task(self._listen(socket, stop))
@@ -205,15 +224,23 @@ class CoinbaseWebSocketClient:
         while not stop.is_set():
             message = json.loads(await socket.recv())
             channel = message.get("channel")
-            if channel != "l2_data":
-                # Diagnostic only: surface subscription rejections/errors that
-                # would otherwise be silently dropped here, since a healthy
-                # subscribe also produces non-data control messages
-                # (e.g. "subscriptions", "heartbeats").
+            if channel == "heartbeats":
+                continue
+            if channel == "subscriptions":
                 LOGGER.info(
-                    "coinbase websocket non-l2_data message: channel=%r %r", channel, message
+                    "coinbase websocket subscription confirmed: %r", message.get("events")
                 )
                 continue
+            if channel != "l2_data":
+                # Anything else is unexpected (e.g. an error/rejection message);
+                # low-noise visibility without spamming at the default level.
+                LOGGER.debug(
+                    "coinbase websocket unexpected message: channel=%r %r", channel, message
+                )
+                continue
+            if not self._l2_data_confirmed:
+                self._l2_data_confirmed = True
+                LOGGER.info("coinbase websocket receiving l2_data")
             for event in message.get("events", []):
                 for update in event.get("updates", []):
                     symbol = update.get("product_id")

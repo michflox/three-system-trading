@@ -68,6 +68,7 @@ class Recorder:
             auth = CdpJwtAuth.from_env()
         except RuntimeError:
             auth = None
+        self._auth = auth
         self.coinbase = CoinbaseRestClient(auth=auth)
         self.kraken = KrakenRestClient()
         self.stop = asyncio.Event()
@@ -120,7 +121,9 @@ class Recorder:
             group.create_task(
                 _reconnecting(
                     "coinbase websocket",
-                    lambda: CoinbaseWebSocketClient().record(self.queue.put, self.stop),
+                    lambda: CoinbaseWebSocketClient(auth=self._auth).record(
+                        self.queue.put, self.stop
+                    ),
                     self.stop,
                 )
             )

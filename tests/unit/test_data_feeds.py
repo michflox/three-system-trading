@@ -1,13 +1,17 @@
 import asyncio
+import contextlib
+import json
 from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
+import pytest
 
 from data.feeds.coinbase import (
     CdePermissionVerificationUnavailable,
     CoinbaseRestClient,
+    CoinbaseWebSocketClient,
     FundingPermissionError,
     parse_product_funding,
 )
@@ -166,6 +170,136 @@ def test_funding_permission_gate_allows_view_only_key() -> None:
     second_call_url: str = http.get.call_args_list[1].args[0]
     assert "api.coinbase.com" in second_call_url
     assert "BIP-20DEC30-CDE" in second_call_url
+
+
+# ---------------------------------------------------------------------------
+# CoinbaseWebSocketClient — level2 JWT auth and low-noise message handling
+# ---------------------------------------------------------------------------
+
+class _FakeWsSocket:
+    def __init__(self, messages: list[dict[str, object]]) -> None:
+        self.sent: list[dict[str, object]] = []
+        self._messages = list(messages)
+
+    async def send(self, payload: str) -> None:
+        self.sent.append(json.loads(payload))
+
+    async def recv(self) -> str:
+        if self._messages:
+            return json.dumps(self._messages.pop(0))
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
+
+    async def __aenter__(self) -> "_FakeWsSocket":
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        return None
+
+
+class _MockWsAuth:
+    def websocket_token(self) -> str:
+        return "mock-ws-jwt-token"
+
+
+def _run_record_briefly(
+    client: CoinbaseWebSocketClient,
+    fake_socket: "_FakeWsSocket",
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    timeout: float = 0.2,
+) -> list[dict[str, object]]:
+    monkeypatch.setattr(
+        "data.feeds.coinbase.websockets.connect", lambda *args, **kwargs: fake_socket
+    )
+    stop = asyncio.Event()
+    received: list[dict[str, object]] = []
+
+    async def callback(row: dict[str, object]) -> None:
+        received.append(row)
+
+    async def exercise() -> None:
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(client.record(callback, stop), timeout=timeout)
+
+    asyncio.run(exercise())
+    return received
+
+
+def test_level2_subscribe_includes_jwt_and_applies_l2_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    messages = [
+        {"channel": "subscriptions", "events": [{"subscriptions": {"level2": ["BTC-USD"]}}]},
+        {"channel": "heartbeats", "events": [{"heartbeat_counter": 1}]},
+        {
+            "channel": "l2_data",
+            "events": [
+                {
+                    "updates": [
+                        {
+                            "product_id": "BTC-USD",
+                            "side": "bid",
+                            "price_level": "100",
+                            "new_quantity": "1",
+                        },
+                        {
+                            "product_id": "BTC-USD",
+                            "side": "offer",
+                            "price_level": "101",
+                            "new_quantity": "2",
+                        },
+                    ]
+                }
+            ],
+        },
+    ]
+    fake_socket = _FakeWsSocket(messages)
+    client = CoinbaseWebSocketClient(symbols=("BTC-USD",), auth=_MockWsAuth())
+    _run_record_briefly(client, fake_socket, monkeypatch)
+
+    level2_payload = fake_socket.sent[0]
+    assert level2_payload["channel"] == "level2"
+    assert level2_payload["jwt"] == "mock-ws-jwt-token"
+    heartbeats_payload = fake_socket.sent[1]
+    assert heartbeats_payload["channel"] == "heartbeats"
+    assert "jwt" not in heartbeats_payload
+    assert client._l2_data_confirmed is True
+    assert client._bids["BTC-USD"][Decimal("100")] == Decimal("1")
+    assert client._asks["BTC-USD"][Decimal("101")] == Decimal("2")
+
+
+def test_level2_subscribe_omits_jwt_when_no_auth_provided(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_socket = _FakeWsSocket([])
+    client = CoinbaseWebSocketClient(symbols=("BTC-USD",), auth=None)
+    _run_record_briefly(client, fake_socket, monkeypatch, timeout=0.1)
+
+    assert "jwt" not in fake_socket.sent[0]
+
+
+def test_heartbeats_are_not_logged_and_subscription_confirmed_once(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    messages = [
+        {"channel": "subscriptions", "events": [{"subscriptions": {"level2": ["BTC-USD"]}}]},
+        {"channel": "heartbeats", "events": [{"heartbeat_counter": 1}]},
+        {"channel": "heartbeats", "events": [{"heartbeat_counter": 2}]},
+        {"channel": "heartbeats", "events": [{"heartbeat_counter": 3}]},
+    ]
+    fake_socket = _FakeWsSocket(messages)
+    client = CoinbaseWebSocketClient(symbols=("BTC-USD",), auth=None)
+
+    with caplog.at_level("INFO", logger="market-data-recorder"):
+        _run_record_briefly(client, fake_socket, monkeypatch)
+
+    heartbeat_logs = [r for r in caplog.records if "heartbeat" in r.getMessage().lower()]
+    assert heartbeat_logs == []
+    subscription_logs = [
+        r for r in caplog.records if "subscription confirmed" in r.getMessage()
+    ]
+    assert len(subscription_logs) == 1
 
 
 def test_kraken_parser_drops_documented_uncommitted_last_candle() -> None:
